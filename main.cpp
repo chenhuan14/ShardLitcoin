@@ -35,7 +35,7 @@ CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
 map<uint256, CBlockIndex*> mapBlockIndex;
-uint256 hashGenesisBlock("0x7e0efe16908126e3f812f16656a25c45ca7224916eab52935098f106c1f76f2d");
+uint256 hashGenesisBlock("0x04313c86950b99f90dd16b7998969a6c07f83dba1f97acecf3c41530cdc9814c");
 static CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // Litecoin: starting difficulty is 1 / 2^12
 CBlockIndex* pindexGenesisBlock = NULL;
 int nBestHeight = -1;
@@ -2746,7 +2746,7 @@ bool LoadBlockIndex()
         pchMessageStart[1] = 0xc2;
         pchMessageStart[2] = 0xb7;
         pchMessageStart[3] = 0xdc;
-        hashGenesisBlock = uint256("0x7e0efe16908126e3f812f16656a25c45ca7224916eab52935098f106c1f76f2d");
+        hashGenesisBlock = uint256("0x04313c86950b99f90dd16b7998969a6c07f83dba1f97acecf3c41530cdc9814c");
     }
 
     //
@@ -2789,16 +2789,21 @@ bool InitBlockIndex() {
         CBlock block;
         block.vtx.push_back(txNew);
         block.hashPrevBlock = 0;
+        block.nShardID = 0;
+        for (unsigned int i = 0 ;i < SHARD_NUM; i++)
+        {
+            block.vHashShardPrevBlocks[i] = 0;
+        }
         block.hashMerkleRoot = block.BuildMerkleTree();
         block.nVersion = 1;
         block.nTime    = 1511321000;
         block.nBits    = 0x1e0ffff0;
-        block.nNonce   = 278704;
+        block.nNonce   = 1074294;
 
         if (fTestNet)
         {
             block.nTime    = 1511321000;
-            block.nNonce   = 278704;
+            block.nNonce   = 1074294;
         }
 
         //// debug print
@@ -2815,22 +2820,22 @@ bool InitBlockIndex() {
             //creating a different genesis block:
  	    uint256 hashTarget = CBigNum().SetCompact(block.nBits).getuint256();
 	    uint256 thash;
-    	    char scratchpad[SCRYPT_SCRATCHPAD_SIZE];	
-            loop
+    	char scratchpad[SCRYPT_SCRATCHPAD_SIZE];	
+        loop
 	    {
-		scrypt_1024_1_1_256_sp(BEGIN(block.nVersion), BEGIN(thash), scratchpad);
-		if (thash <= hashTarget)
-		    break;
-		if ((block.nNonce & 0xFFF) == 0)
-		{
-		    printf("nonce %08X: hash = %s (target = %s)\n", block.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
-		}
-		++block.nNonce;
-		if (block.nNonce == 0)
-		{
-		    printf("NONCE WRAPPED, incrementing time\n");
-		    ++block.nTime;
-		}
+            scrypt_1024_1_1_256_sp(BEGIN(block.nVersion), BEGIN(thash), scratchpad);
+            if (thash <= hashTarget)
+                break;
+            if ((block.nNonce & 0xFFF) == 0)
+            {
+                printf("nonce %08X: hash = %s (target = %s)\n", block.nNonce, thash.ToString().c_str(), hashTarget.ToString().c_str());
+            }
+            ++block.nNonce;
+            if (block.nNonce == 0)
+            {
+                printf("NONCE WRAPPED, incrementing time\n");
+                ++block.nTime;
+            }
 	    }
 	    printf("block.nTime = %u \n", block.nTime);
 	    printf("block.nNonce = %u \n", block.nNonce);
@@ -2967,7 +2972,7 @@ bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp)
                     continue;
                 // read size
                 blkdat >> nSize;
-                if (nSize < 80 || nSize > MAX_BLOCK_SIZE)
+                if (nSize < 180 || nSize > MAX_BLOCK_SIZE)
                     continue;
             } catch (std::exception &e) {
                 // no valid block header found; don't complain

@@ -25,6 +25,8 @@ class CNode;
 
 struct CBlockIndexWorkComparator;
 
+static const unsigned int SHARD_NUM = 3;
+
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;                      // 1000KB block hard limit
 /** Obsolete: maximum size for mined blocks */
@@ -1274,6 +1276,8 @@ public:
     uint256 ExtractMatches(std::vector<uint256> &vMatch);
 };
 
+extern unsigned int nThisShardID;
+
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -1281,6 +1285,14 @@ public:
  * to everyone and the block is added to the block chain.  The first transaction
  * in the block is a special one that creates a new coin owned by the creator
  * of the block.
+ * 
+ * 
+ * The BlockHeader adds the ShardID, and other shards previous hash, that forms DAG.
+ * 
+ * so the size of the BlockHeader is not 80bytes anymore, the new block BlockHeader size 
+ * is 80+4+32*SHARD_NUM:
+ * when the shard num is 3, the block header is 180 bytes.
+ * 
  */
 class CBlockHeader
 {
@@ -1288,7 +1300,9 @@ public:
     // header
     static const int CURRENT_VERSION=2;
     int nVersion;
+    unsigned int nShardID;
     uint256 hashPrevBlock;
+    uint256 vHashShardPrevBlocks[SHARD_NUM];
     uint256 hashMerkleRoot;
     unsigned int nTime;
     unsigned int nBits;
@@ -1303,7 +1317,9 @@ public:
     (
         READWRITE(this->nVersion);
         nVersion = this->nVersion;
+        READWRITE(nShardID);
         READWRITE(hashPrevBlock);
+        READWRITE(FLATDATA(vHashShardPrevBlocks));
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
@@ -1314,6 +1330,11 @@ public:
     {
         nVersion = CBlockHeader::CURRENT_VERSION;
         hashPrevBlock = 0;
+        nShardID = nThisShardID;
+        for (unsigned int i = 0; i< SHARD_NUM; i++)
+        {
+            vHashShardPrevBlocks[i] = 0;
+        }
         hashMerkleRoot = 0;
         nTime = 0;
         nBits = 0;
@@ -1382,7 +1403,12 @@ public:
     {
         CBlockHeader block;
         block.nVersion       = nVersion;
+        block.nShardID       = nShardID;
         block.hashPrevBlock  = hashPrevBlock;
+        for (unsigned int i = 0; i< SHARD_NUM; i++)
+        {
+            block.vHashShardPrevBlocks[i] = vHashShardPrevBlocks[i];
+        }
         block.hashMerkleRoot = hashMerkleRoot;
         block.nTime          = nTime;
         block.nBits          = nBits;
@@ -1500,11 +1526,12 @@ public:
 
     void print() const
     {
-        printf("CBlock(hash=%s, input=%s, PoW=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%"PRIszu")\n",
+        printf("CBlock(hash=%s, input=%s, PoW=%s, ver=%d, shardID=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%"PRIszu")\n",
             GetHash().ToString().c_str(),
-            HexStr(BEGIN(nVersion),BEGIN(nVersion)+80,false).c_str(),
+            HexStr(BEGIN(nVersion),BEGIN(nVersion)+180,false).c_str(),
             GetPoWHash().ToString().c_str(),
             nVersion,
+            nShardID,
             hashPrevBlock.ToString().c_str(),
             hashMerkleRoot.ToString().c_str(),
             nTime, nBits, nNonce,

@@ -8,6 +8,7 @@
 #include "wallet.h"
 
 extern CWallet* pwalletMain;
+extern unsigned int nThisShardID;
 
 void StartShutdown();
 bool ShutdownRequested();
