@@ -9,6 +9,8 @@
 
 using namespace std;
 
+extern unsigned int nThisShardID;
+
 void static BatchWriteCoins(CLevelDBBatch &batch, const uint256 &hash, const CCoins &coins) {
     if (coins.IsPruned())
         batch.Erase(make_pair('c', hash));
@@ -209,7 +211,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
 
                 // Construct block index object
                 CBlockIndex* pindexNew = InsertBlockIndex(diskindex.GetBlockHash());
-                pindexNew->pprev          = InsertBlockIndex(diskindex.hashPrev);
+                pindexNew->pprevs[nThisShardID]          = InsertBlockIndex(diskindex.hashPrevs[nThisShardID]);
                 pindexNew->nHeight        = diskindex.nHeight;
                 pindexNew->nFile          = diskindex.nFile;
                 pindexNew->nDataPos       = diskindex.nDataPos;

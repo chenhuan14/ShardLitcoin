@@ -1656,6 +1656,16 @@ enum BlockStatus {
  * main/longest chain.  A blockindex may have multiple pprev pointing back
  * to it, but pnext will only point forward to the longest branch, or will
  * be null if the block is not part of the longest chain.
+ * 
+ * 
+ * 
+ * sharding implements:
+ * multi *pprev and multi pnext; CBlockIndex* pprevs[SHARD_NUM];
+ * 
+ * nHeight: the main chain and the shard has its own height;
+ * nChainWork: the shard has it's own work, but the main chain add up the shard it has confirm;
+ * cChainTx: the same as the nChainWork
+ * 
  */
 class CBlockIndex
 {
@@ -1664,10 +1674,10 @@ public:
     const uint256* phashBlock;
 
     // pointer to the index of the predecessor of this block
-    CBlockIndex* pprev;
+    CBlockIndex* pprevs[SHARD_NUM];
 
     // (memory only) pointer to the index of the *active* successor of this block
-    CBlockIndex* pnext;
+    CBlockIndex* pnexts[SHARD_NUM];
 
     // height of the entry in the chain. The genesis block has height 0
     int nHeight;
@@ -1696,6 +1706,7 @@ public:
 
     // block header
     int nVersion;
+    unsigned int nShardID;
     uint256 hashMerkleRoot;
     unsigned int nTime;
     unsigned int nBits;
@@ -1705,8 +1716,12 @@ public:
     CBlockIndex()
     {
         phashBlock = NULL;
-        pprev = NULL;
-        pnext = NULL;
+
+        for (unsigned int i = 0 ; i < SHARD_NUM; i++)
+        {
+            pprevs[i] = NULL;
+            pnexts[i] = NULL;
+        }
         nHeight = 0;
         nFile = 0;
         nDataPos = 0;
@@ -1717,6 +1732,7 @@ public:
         nStatus = 0;
 
         nVersion       = 0;
+        nShardID       = nThisShardID;
         hashMerkleRoot = 0;
         nTime          = 0;
         nBits          = 0;
@@ -1726,8 +1742,11 @@ public:
     CBlockIndex(CBlockHeader& block)
     {
         phashBlock = NULL;
-        pprev = NULL;
-        pnext = NULL;
+        for (unsigned int i = 0 ; i < SHARD_NUM; i++)
+        {
+            pprevs[i] = NULL;
+            pnexts[i] = NULL;
+        }
         nHeight = 0;
         nFile = 0;
         nDataPos = 0;
@@ -1738,6 +1757,7 @@ public:
         nStatus = 0;
 
         nVersion       = block.nVersion;
+        nShardID       = block.nShardID;
         hashMerkleRoot = block.hashMerkleRoot;
         nTime          = block.nTime;
         nBits          = block.nBits;
@@ -1766,8 +1786,13 @@ public:
     {
         CBlockHeader block;
         block.nVersion       = nVersion;
-        if (pprev)
-            block.hashPrevBlock = pprev->GetBlockHash();
+        block.nShardID       = nShardID;
+        for (unsigned int i = 0 ;i < SHARD_NUM; i++)
+        {
+            if(pprevs[i])
+                block.vHashShardPrevBlocks[i] = pprevs[i]->GetBlockHash();
+        }
+
         block.hashMerkleRoot = hashMerkleRoot;
         block.nTime          = nTime;
         block.nBits          = nBits;
@@ -1796,7 +1821,7 @@ public:
 
     bool IsInMainChain() const
     {
-        return (pnext || this == pindexBest);
+        return (pnexts[nThisShardID] || this == pindexBest);
     }
 
     bool CheckIndex() const
@@ -1815,7 +1840,7 @@ public:
         int64* pend = &pmedian[nMedianTimeSpan];
 
         const CBlockIndex* pindex = this;
-        for (int i = 0; i < nMedianTimeSpan && pindex; i++, pindex = pindex->pprev)
+        for (int i = 0; i < nMedianTimeSpan && pindex; i++, pindex = pindex->pprevs[nThisShardID])
             *(--pbegin) = pindex->GetBlockTime();
 
         std::sort(pbegin, pend);
@@ -1827,9 +1852,9 @@ public:
         const CBlockIndex* pindex = this;
         for (int i = 0; i < nMedianTimeSpan/2; i++)
         {
-            if (!pindex->pnext)
+            if (!pindex->pnexts[nThisShardID])
                 return GetBlockTime();
-            pindex = pindex->pnext;
+            pindex = pindex->pnexts[nThisShardID];
         }
         return pindex->GetMedianTimePast();
     }
@@ -1844,7 +1869,7 @@ public:
     std::string ToString() const
     {
         return strprintf("CBlockIndex(pprev=%p, pnext=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
-            pprev, pnext, nHeight,
+            pprevs[nThisShardID], pnexts[nThisShardID], nHeight,
             hashMerkleRoot.ToString().c_str(),
             GetBlockHash().ToString().c_str());
     }
@@ -1874,14 +1899,21 @@ struct CBlockIndexWorkComparator
 class CDiskBlockIndex : public CBlockIndex
 {
 public:
-    uint256 hashPrev;
+    uint256 hashPrevs[SHARD_NUM];   // the main chain blocks have mutiple previous block; the shard block has only one previos block.
 
     CDiskBlockIndex() {
-        hashPrev = 0;
+        for(unsigned int i = 0;i < SHARD_NUM;i++)
+        {
+            hashPrevs[i] = 0;
+        }
     }
 
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex) {
-        hashPrev = (pprev ? pprev->GetBlockHash() : 0);
+        for(unsigned int i = 0;i < SHARD_NUM;i++)
+        {
+           hashPrevs[i] = (pnexts[i] ? pprevs[i]->GetBlockHash() : 0);
+        }
+        
     }
 
     IMPLEMENT_SERIALIZE
@@ -1901,7 +1933,8 @@ public:
 
         // block header
         READWRITE(this->nVersion);
-        READWRITE(hashPrev);
+        READWRITE(nShardID);
+        READWRITE(FLATDATA(hashPrevs));
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);
         READWRITE(nBits);
@@ -1912,7 +1945,12 @@ public:
     {
         CBlockHeader block;
         block.nVersion        = nVersion;
-        block.hashPrevBlock   = hashPrev;
+        block.nShardID        = nShardID;
+        block.hashPrevBlock = hashPrevs[nThisShardID];
+        for (unsigned int i = 0 ;i <SHARD_NUM;i ++)
+        {
+            block.vHashShardPrevBlocks[i] = hashPrevs[i];
+        }
         block.hashMerkleRoot  = hashMerkleRoot;
         block.nTime           = nTime;
         block.nBits           = nBits;
@@ -1925,9 +1963,9 @@ public:
     {
         std::string str = "CDiskBlockIndex(";
         str += CBlockIndex::ToString();
-        str += strprintf("\n                hashBlock=%s, hashPrev=%s)",
+        str += strprintf("\n                hashBlock=%s, hashPrevs=%s)",
             GetBlockHash().ToString().c_str(),
-            hashPrev.ToString().c_str());
+            hashPrevs[nThisShardID].ToString().c_str());
         return str;
     }
 
@@ -2053,7 +2091,7 @@ public:
 
             // Exponentially larger steps back
             for (int i = 0; pindex && i < nStep; i++)
-                pindex = pindex->pprev;
+                pindex = pindex->pprevs[nThisShardID];
             if (vHave.size() > 10)
                 nStep *= 2;
         }

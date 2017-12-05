@@ -16,6 +16,8 @@ using namespace boost;
 using namespace boost::assign;
 using namespace json_spirit;
 
+extern unsigned int nThisShardID;
+
 int64 nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 
@@ -1223,7 +1225,7 @@ Value listsinceblock(const Array& params, bool fHelp)
         CBlockIndex *block;
         for (block = pindexBest;
              block && block->nHeight > target_height;
-             block = block->pprev)  { }
+             block = block->pprevs[nThisShardID])  { }
 
         lastblock = block ? block->GetBlockHash() : 0;
     }

@@ -12,7 +12,7 @@
 #include <boost/algorithm/string/replace.hpp>
 
 using namespace std;
-
+extern unsigned int nThisShardID;
 
 bool bSpendZeroConfChange = true;
 
@@ -802,7 +802,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
                 if (AddToWalletIfInvolvingMe(tx.GetHash(), tx, &block, fUpdate))
                     ret++;
             }
-            pindex = pindex->pnext;
+            pindex = pindex->pnexts[nThisShardID];
         }
     }
     return ret;

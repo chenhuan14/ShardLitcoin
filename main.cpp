@@ -34,7 +34,7 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
-map<uint256, CBlockIndex*> mapBlockIndex;
+map<uint256, CBlockIndex*> mapBlockIndex;  //not need change
 uint256 hashGenesisBlock("0x04313c86950b99f90dd16b7998969a6c07f83dba1f97acecf3c41530cdc9814c");
 static CBigNum bnProofOfWorkLimit(~uint256(0) >> 20); // Litecoin: starting difficulty is 1 / 2^12
 CBlockIndex* pindexGenesisBlock = NULL;
@@ -42,7 +42,7 @@ int nBestHeight = -1;
 uint256 nBestChainWork = 0;
 uint256 nBestInvalidWork = 0;
 uint256 hashBestChain = 0;
-CBlockIndex* pindexBest = NULL;
+CBlockIndex* pindexBest = NULL;   // need to be a map struct
 set<CBlockIndex*, CBlockIndexWorkComparator> setBlockIndexValid; // may contain all CBlockIndex*'s that have validness >=BLOCK_VALID_TRANSACTIONS, and must contain those who aren't failed
 int64 nTimeBestReceived = 0;
 int nScriptCheckThreads = 0;
@@ -59,7 +59,7 @@ int64 CTransaction::nMinRelayTxFee = 100000;
 
 CMedianFilter<int> cPeerBlockCounts(8, 0); // Amount of blocks that other nodes claim to have
 
-map<uint256, CBlock*> mapOrphanBlocks;
+map<uint256, CBlock*> mapOrphanBlocks;    //not need to change
 multimap<uint256, CBlock*> mapOrphanBlocksByPrev;
 
 map<uint256, CTransaction> mapOrphanTransactions;
@@ -1061,9 +1061,9 @@ CBlockIndex* FindBlockByHeight(int nHeight)
     if (pblockindexFBBHLast && abs(nHeight - pblockindex->nHeight) > abs(nHeight - pblockindexFBBHLast->nHeight))
         pblockindex = pblockindexFBBHLast;
     while (pblockindex->nHeight > nHeight)
-        pblockindex = pblockindex->pprev;
+        pblockindex = pblockindex->pprevs[nThisShardID];
     while (pblockindex->nHeight < nHeight)
-        pblockindex = pblockindex->pnext;
+        pblockindex = pblockindex->pnexts[nThisShardID];
     pblockindexFBBHLast = pblockindex;
     return pblockindex;
 }
@@ -1146,8 +1146,8 @@ unsigned int static GetNextWorkRequired(const CBlockIndex* pindexLast, const CBl
             {
                 // Return the last non-special-min-difficulty-rules-block
                 const CBlockIndex* pindex = pindexLast;
-                while (pindex->pprev && pindex->nHeight % nInterval != 0 && pindex->nBits == nProofOfWorkLimit)
-                    pindex = pindex->pprev;
+                while (pindex->pprevs[nThisShardID] && pindex->nHeight % nInterval != 0 && pindex->nBits == nProofOfWorkLimit)
+                    pindex = pindex->pprevs[nThisShardID];
                 return pindex->nBits;
             }
         }
@@ -1164,7 +1164,7 @@ unsigned int static GetNextWorkRequired(const CBlockIndex* pindexLast, const CBl
     // Go back by what we want to be 14 days worth of blocks
     const CBlockIndex* pindexFirst = pindexLast;
     for (int i = 0; pindexFirst && i < blockstogoback; i++)
-        pindexFirst = pindexFirst->pprev;
+        pindexFirst = pindexFirst->pprevs[nThisShardID];
     assert(pindexFirst);
 
     // Limit adjustment step
@@ -1254,7 +1254,7 @@ void static InvalidBlockFound(CBlockIndex *pindex) {
     pblocktree->WriteBlockIndex(CDiskBlockIndex(pindex));
     setBlockIndexValid.erase(pindex);
     InvalidChainFound(pindex);
-    if (pindex->pnext) {
+    if (pindex->pnexts[nThisShardID]) {
         CValidationState stateDummy;
         ConnectBestBlock(stateDummy); // reorganise away from the failed block
     }
@@ -1285,7 +1285,7 @@ bool ConnectBestBlock(CValidationState &state) {
                     pindexFailed->nStatus |= BLOCK_FAILED_CHILD;
                     setBlockIndexValid.erase(pindexFailed);
                     pblocktree->WriteBlockIndex(CDiskBlockIndex(pindexFailed));
-                    pindexFailed = pindexFailed->pprev;
+                    pindexFailed = pindexFailed->pprevs[nThisShardID];
                 }
                 InvalidChainFound(pindexNewBest);
                 break;
@@ -1294,7 +1294,7 @@ bool ConnectBestBlock(CValidationState &state) {
             if (pindexBest == NULL || pindexTest->nChainWork > pindexBest->nChainWork)
                 vAttach.push_back(pindexTest);
 
-            if (pindexTest->pprev == NULL || pindexTest->pnext != NULL) {
+            if (pindexTest->pprevs[nThisShardID] == NULL || pindexTest->pnexts[nThisShardID] != NULL) {
                 reverse(vAttach.begin(), vAttach.end());
                 BOOST_FOREACH(CBlockIndex *pindexSwitch, vAttach) {
                     boost::this_thread::interruption_point();
@@ -1307,7 +1307,7 @@ bool ConnectBestBlock(CValidationState &state) {
                 }
                 return true;
             }
-            pindexTest = pindexTest->pprev;
+            pindexTest = pindexTest->pprevs[nThisShardID];
         } while(true);
     } while(true);
 }
@@ -1512,7 +1512,7 @@ bool CBlock::DisconnectBlock(CValidationState &state, CBlockIndex *pindex, CCoin
     CDiskBlockPos pos = pindex->GetUndoPos();
     if (pos.IsNull())
         return error("DisconnectBlock() : no undo data available");
-    if (!blockUndo.ReadFromDisk(pos, pindex->pprev->GetBlockHash()))
+    if (!blockUndo.ReadFromDisk(pos, pindex->pprevs[nThisShardID]->GetBlockHash()))
         return error("DisconnectBlock() : failure reading undo data");
 
     if (blockUndo.vtxundo.size() + 1 != vtx.size())
@@ -1576,7 +1576,7 @@ bool CBlock::DisconnectBlock(CValidationState &state, CBlockIndex *pindex, CCoin
     }
 
     // move best block pointer to prevout block
-    view.SetBestBlock(pindex->pprev);
+    view.SetBestBlock(pindex->pprevs[nThisShardID]);
 
     if (pfClean) {
         *pfClean = fClean;
@@ -1625,7 +1625,7 @@ bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsVi
         return false;
 
     // verify that the view's current state corresponds to the previous block
-    assert(pindex->pprev == view.GetBestBlock());
+    assert(pindex->pprevs[nThisShardID] == view.GetBestBlock());
 
     // Special case for the genesis block, skipping connection of its transactions
     // (its coinbase is unspendable)
@@ -1739,7 +1739,7 @@ bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsVi
             CDiskBlockPos pos;
             if (!FindUndoPos(state, pindex->nFile, pos, ::GetSerializeSize(blockundo, SER_DISK, CLIENT_VERSION) + 40))
                 return error("ConnectBlock() : FindUndoPos failed");
-            if (!blockundo.WriteToDisk(pos, pindex->pprev->GetBlockHash()))
+            if (!blockundo.WriteToDisk(pos, pindex->pprevs[nThisShardID]->GetBlockHash()))
                 return state.Abort(_("Failed to write undo data"));
 
             // update nUndoPos in block index
@@ -1780,23 +1780,23 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
     while (pfork && pfork != plonger)
     {
         while (plonger->nHeight > pfork->nHeight) {
-            plonger = plonger->pprev;
+            plonger = plonger->pprevs[nThisShardID];
             assert(plonger != NULL);
         }
         if (pfork == plonger)
             break;
-        pfork = pfork->pprev;
+        pfork = pfork->pprevs[nThisShardID];
         assert(pfork != NULL);
     }
 
     // List of what to disconnect (typically nothing)
     vector<CBlockIndex*> vDisconnect;
-    for (CBlockIndex* pindex = view.GetBestBlock(); pindex != pfork; pindex = pindex->pprev)
+    for (CBlockIndex* pindex = view.GetBestBlock(); pindex != pfork; pindex = pindex->pprevs[nThisShardID])
         vDisconnect.push_back(pindex);
 
     // List of what to connect (typically only pindexNew)
     vector<CBlockIndex*> vConnect;
-    for (CBlockIndex* pindex = pindexNew; pindex != pfork; pindex = pindex->pprev)
+    for (CBlockIndex* pindex = pindexNew; pindex != pfork; pindex = pindex->pprevs[nThisShardID])
         vConnect.push_back(pindex);
     reverse(vConnect.begin(), vConnect.end());
 
@@ -1876,13 +1876,13 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
 
     // Disconnect shorter branch
     BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
-        if (pindex->pprev)
-            pindex->pprev->pnext = NULL;
+        if (pindex->pprevs[nThisShardID])
+            pindex->pprevs[nThisShardID]->pnexts[nThisShardID] = NULL;
 
     // Connect longer branch
     BOOST_FOREACH(CBlockIndex* pindex, vConnect)
-        if (pindex->pprev)
-            pindex->pprev->pnext = pindex;
+        if (pindex->pprevs[nThisShardID])
+            pindex->pprevs[nThisShardID]->pnexts[nThisShardID] = pindex;
 
     // Resurrect memory transactions that were in the disconnected branch
     BOOST_FOREACH(CTransaction& tx, vResurrect) {
@@ -1927,7 +1927,7 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
         {
             if (pindex->nVersion > CBlock::CURRENT_VERSION)
                 ++nUpgraded;
-            pindex = pindex->pprev;
+            pindex = pindex->pprevs[nThisShardID];
         }
         if (nUpgraded > 0)
             printf("SetBestChain: %d of last 100 blocks above version %d\n", nUpgraded, CBlock::CURRENT_VERSION);
@@ -1947,7 +1947,7 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
     return true;
 }
 
-
+/*change here: to form the DAG*/
 bool CBlock::AddToBlockIndex(CValidationState &state, const CDiskBlockPos &pos)
 {
     // Check for duplicate
@@ -1963,12 +1963,12 @@ bool CBlock::AddToBlockIndex(CValidationState &state, const CDiskBlockPos &pos)
     map<uint256, CBlockIndex*>::iterator miPrev = mapBlockIndex.find(hashPrevBlock);
     if (miPrev != mapBlockIndex.end())
     {
-        pindexNew->pprev = (*miPrev).second;
-        pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
+        pindexNew->pprevs[nThisShardID] = (*miPrev).second;
+        pindexNew->nHeight = pindexNew->pprevs[nThisShardID]->nHeight + 1;
     }
     pindexNew->nTx = vtx.size();
-    pindexNew->nChainWork = (pindexNew->pprev ? pindexNew->pprev->nChainWork : 0) + pindexNew->GetBlockWork().getuint256();
-    pindexNew->nChainTx = (pindexNew->pprev ? pindexNew->pprev->nChainTx : 0) + pindexNew->nTx;
+    pindexNew->nChainWork = (pindexNew->pprevs[nThisShardID] ? pindexNew->pprevs[nThisShardID]->nChainWork : 0) + pindexNew->GetBlockWork().getuint256();
+    pindexNew->nChainTx = (pindexNew->pprevs[nThisShardID] ? pindexNew->pprevs[nThisShardID]->nChainTx : 0) + pindexNew->nTx;
     pindexNew->nFile = pos.nFile;
     pindexNew->nDataPos = pos.nPos;
     pindexNew->nUndoPos = 0;
@@ -2268,7 +2268,7 @@ bool CBlockIndex::IsSuperMajority(int minVersion, const CBlockIndex* pstart, uns
     {
         if (pstart->nVersion >= minVersion)
             ++nFound;
-        pstart = pstart->pprev;
+        pstart = pstart->pprevs[nThisShardID];
     }
     return (nFound >= nRequired);
 }
@@ -2605,8 +2605,8 @@ bool static LoadBlockIndexDB()
     BOOST_FOREACH(const PAIRTYPE(int, CBlockIndex*)& item, vSortedByHeight)
     {
         CBlockIndex* pindex = item.second;
-        pindex->nChainWork = (pindex->pprev ? pindex->pprev->nChainWork : 0) + pindex->GetBlockWork().getuint256();
-        pindex->nChainTx = (pindex->pprev ? pindex->pprev->nChainTx : 0) + pindex->nTx;
+        pindex->nChainWork = (pindex->pprevs[nThisShardID] ? pindex->pprevs[nThisShardID]->nChainWork : 0) + pindex->GetBlockWork().getuint256();
+        pindex->nChainTx = (pindex->pprevs[nThisShardID] ? pindex->pprevs[nThisShardID]->nChainTx : 0) + pindex->nTx;
         if ((pindex->nStatus & BLOCK_VALID_MASK) >= BLOCK_VALID_TRANSACTIONS && !(pindex->nStatus & BLOCK_FAILED_MASK))
             setBlockIndexValid.insert(pindex);
     }
@@ -2641,9 +2641,9 @@ bool static LoadBlockIndexDB()
 
     // set 'next' pointers in best chain
     CBlockIndex *pindex = pindexBest;
-    while(pindex != NULL && pindex->pprev != NULL) {
-         CBlockIndex *pindexPrev = pindex->pprev;
-         pindexPrev->pnext = pindex;
+    while(pindex != NULL && pindex->pprevs[nThisShardID] != NULL) {
+         CBlockIndex *pindexPrev = pindex->pprevs[nThisShardID];
+         pindexPrev->pnexts[nThisShardID] = pindex;
          pindex = pindexPrev;
     }
     printf("LoadBlockIndexDB(): hashBestChain=%s  height=%d date=%s\n",
@@ -2655,7 +2655,7 @@ bool static LoadBlockIndexDB()
 
 bool VerifyDB(int nCheckLevel, int nCheckDepth)
 {
-    if (pindexBest == NULL || pindexBest->pprev == NULL)
+    if (pindexBest == NULL || pindexBest->pprevs[nThisShardID] == NULL)
         return true;
 
     // Verify blocks in the best chain
@@ -2670,7 +2670,7 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
     CBlockIndex* pindexFailure = NULL;
     int nGoodTransactions = 0;
     CValidationState state;
-    for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
+    for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprevs[nThisShardID]; pindex = pindex->pprevs[nThisShardID])
     {
         boost::this_thread::interruption_point();
         if (pindex->nHeight < nBestHeight-nCheckDepth)
@@ -2687,7 +2687,7 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
             CBlockUndo undo;
             CDiskBlockPos pos = pindex->GetUndoPos();
             if (!pos.IsNull()) {
-                if (!undo.ReadFromDisk(pos, pindex->pprev->GetBlockHash()))
+                if (!undo.ReadFromDisk(pos, pindex->pprevs[nThisShardID]->GetBlockHash()))
                     return error("VerifyDB() : *** found bad undo data at %d, hash=%s\n", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
             }
         }
@@ -2696,7 +2696,7 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
             bool fClean = true;
             if (!block.DisconnectBlock(state, pindex, coins, &fClean))
                 return error("VerifyDB() : *** irrecoverable inconsistency in block data at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
-            pindexState = pindex->pprev;
+            pindexState = pindex->pprevs[nThisShardID];
             if (!fClean) {
                 nGoodTransactions = 0;
                 pindexFailure = pindex;
@@ -2712,7 +2712,7 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
         CBlockIndex *pindex = pindexState;
         while (pindex != pindexBest) {
             boost::this_thread::interruption_point();
-            pindex = pindex->pnext;
+            pindex = pindex->pnexts[nThisShardID];
             CBlock block;
             if (!block.ReadFromDisk(pindex))
                 return error("VerifyDB() : *** block.ReadFromDisk failed at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString().c_str());
@@ -2875,7 +2875,7 @@ void PrintBlockTree()
     for (map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
     {
         CBlockIndex* pindex = (*mi).second;
-        mapNext[pindex->pprev].push_back(pindex);
+        mapNext[pindex->pprevs[nThisShardID]].push_back(pindex);
         // test
         //while (rand() % 3 == 0)
         //    mapNext[pindex->pprev].push_back(pindex);
@@ -2925,7 +2925,7 @@ void PrintBlockTree()
         vector<CBlockIndex*>& vNext = mapNext[pindex];
         for (unsigned int i = 0; i < vNext.size(); i++)
         {
-            if (vNext[i]->pnext)
+            if (vNext[i]->pnexts[nThisShardID])
             {
                 swap(vNext[0], vNext[i]);
                 break;
@@ -3539,10 +3539,10 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
 
         // Send the rest of the chain
         if (pindex)
-            pindex = pindex->pnext;
+            pindex = pindex->pnexts[nThisShardID];
         int nLimit = 500;
         printf("getblocks %d to %s limit %d\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().c_str(), nLimit);
-        for (; pindex; pindex = pindex->pnext)
+        for (; pindex; pindex = pindex->pnexts[nThisShardID])
         {
             if (pindex->GetBlockHash() == hashStop)
             {
@@ -3582,14 +3582,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
             // Find the last block the caller has in the main chain
             pindex = locator.GetBlockIndex();
             if (pindex)
-                pindex = pindex->pnext;
+                pindex = pindex->pnexts[nThisShardID];
         }
 
         // we must use CBlocks, as CBlockHeaders won't include the 0x00 nTx count at the end
         vector<CBlock> vHeaders;
         int nLimit = 2000;
         printf("getheaders %d to %s\n", (pindex ? pindex->nHeight : -1), hashStop.ToString().c_str());
-        for (; pindex; pindex = pindex->pnext)
+        for (; pindex; pindex = pindex->pnexts[nThisShardID])
         {
             vHeaders.push_back(pindex->GetBlockHeader());
             if (--nLimit <= 0 || pindex->GetBlockHash() == hashStop)
@@ -4485,7 +4485,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         pblocktemplate->vTxSigOps[0] = pblock->vtx[0].GetLegacySigOpCount();
 
         CBlockIndex indexDummy(*pblock);
-        indexDummy.pprev = pindexPrev;
+        indexDummy.pprevs[nThisShardID] = pindexPrev;
         indexDummy.nHeight = pindexPrev->nHeight + 1;
         CCoinsViewCache viewNew(*pcoinsTip, true);
         CValidationState state;

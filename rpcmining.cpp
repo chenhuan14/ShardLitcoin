@@ -11,6 +11,9 @@
 using namespace json_spirit;
 using namespace std;
 
+
+extern unsigned int nThisShardID;
+
 // Return average network hashes per second based on the last 'lookup' blocks,
 // or from the last difficulty change if 'lookup' is nonpositive.
 // If 'height' is nonnegative, compute the estimate at the time when a given block was found.
@@ -35,7 +38,7 @@ Value GetNetworkHashPS(int lookup, int height) {
     int64 minTime = pb0->GetBlockTime();
     int64 maxTime = minTime;
     for (int i = 0; i < lookup; i++) {
-        pb0 = pb0->pprev;
+        pb0 = pb0->pprevs[nThisShardID];
         int64 time = pb0->GetBlockTime();
         minTime = std::min(time, minTime);
         maxTime = std::max(time, maxTime);

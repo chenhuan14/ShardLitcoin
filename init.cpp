@@ -505,8 +505,7 @@ bool AppInit2(boost::thread_group& threadGroup)
 #endif
 
     // ********************************************************* Step 2: parameter interactions
-
-    if(mapArgs.count("ShardID"))
+    if(mapArgs.count("-ShardID"))
         nThisShardID = atoi(mapArgs["-ShardID"]);
 
     fTestNet = GetBoolArg("-testnet");

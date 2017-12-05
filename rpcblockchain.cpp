@@ -9,6 +9,8 @@
 using namespace json_spirit;
 using namespace std;
 
+extern unsigned int nThisShardID;
+
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, Object& out);
 
 double GetDifficulty(const CBlockIndex* blockindex)
@@ -63,10 +65,10 @@ Object blockToJSON(const CBlock& block, const CBlockIndex* blockindex)
     result.push_back(Pair("bits", HexBits(block.nBits)));
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
 
-    if (blockindex->pprev)
-        result.push_back(Pair("previousblockhash", blockindex->pprev->GetBlockHash().GetHex()));
-    if (blockindex->pnext)
-        result.push_back(Pair("nextblockhash", blockindex->pnext->GetBlockHash().GetHex()));
+    if (blockindex->pprevs[nThisShardID])
+        result.push_back(Pair("previousblockhash", blockindex->pprevs[nThisShardID]->GetBlockHash().GetHex()));
+    if (blockindex->pnexts[nThisShardID])
+        result.push_back(Pair("nextblockhash", blockindex->pnexts[nThisShardID]->GetBlockHash().GetHex()));
     return result;
 }
 
