@@ -85,7 +85,7 @@ extern int nBestHeight;
 extern uint256 nBestChainWork;
 extern uint256 nBestInvalidWork;
 extern uint256 hashBestChain;
-extern CBlockIndex* pindexBest;
+extern CBlockIndex* pindexBests[SHARD_NUM];
 extern unsigned int nTransactionsUpdated;
 extern uint64 nLastBlockTx;
 extern uint64 nLastBlockSize;
@@ -1821,7 +1821,7 @@ public:
 
     bool IsInMainChain() const
     {
-        return (pnexts[nThisShardID] || this == pindexBest);
+        return (pnexts[nThisShardID] || this == pindexBests[nThisShardID]);
     }
 
     bool CheckIndex() const

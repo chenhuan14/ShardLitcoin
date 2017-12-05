@@ -19,10 +19,10 @@ double GetDifficulty(const CBlockIndex* blockindex)
     // minimum difficulty = 1.0.
     if (blockindex == NULL)
     {
-        if (pindexBest == NULL)
+        if (pindexBests[nThisShardID] == NULL)
             return 1.0;
         else
-            blockindex = pindexBest;
+            blockindex = pindexBests[nThisShardID];
     }
 
     int nShift = (blockindex->nBits >> 24) & 0xff;

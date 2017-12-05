@@ -107,7 +107,7 @@ void Shutdown()
     {
         LOCK(cs_main);
         if (pwalletMain)
-            pwalletMain->SetBestChain(CBlockLocator(pindexBest));
+            pwalletMain->SetBestChain(CBlockLocator(pindexBests[nThisShardID]));
         if (pblocktree)
             pblocktree->Flush();
         if (pcoinsTip)
@@ -1046,7 +1046,7 @@ bool AppInit2(boost::thread_group& threadGroup)
                     strErrors << _("Cannot write default address") << "\n";
             }
 
-            pwalletMain->SetBestChain(CBlockLocator(pindexBest));
+            pwalletMain->SetBestChain(CBlockLocator(pindexBests[nThisShardID]));
         }
 
         printf("%s", strErrors.str().c_str());
@@ -1054,7 +1054,7 @@ bool AppInit2(boost::thread_group& threadGroup)
 
         RegisterWallet(pwalletMain);
 
-        CBlockIndex *pindexRescan = pindexBest;
+        CBlockIndex *pindexRescan = pindexBests[nThisShardID];
         if (GetBoolArg("-rescan"))
             pindexRescan = pindexGenesisBlock;
         else
@@ -1066,14 +1066,14 @@ bool AppInit2(boost::thread_group& threadGroup)
             else
                 pindexRescan = pindexGenesisBlock;
         }
-        if (pindexBest && pindexBest != pindexRescan)
+        if (pindexBests[nThisShardID] && pindexBests[nThisShardID] != pindexRescan)
         {
             uiInterface.InitMessage(_("Rescanning..."));
-            printf("Rescanning last %i blocks (from block %i)...\n", pindexBest->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
+            printf("Rescanning last %i blocks (from block %i)...\n", pindexBests[nThisShardID]->nHeight - pindexRescan->nHeight, pindexRescan->nHeight);
             nStart = GetTimeMillis();
             pwalletMain->ScanForWalletTransactions(pindexRescan, true);
             printf(" rescan      %15"PRI64d"ms\n", GetTimeMillis() - nStart);
-            pwalletMain->SetBestChain(CBlockLocator(pindexBest));
+            pwalletMain->SetBestChain(CBlockLocator(pindexBests[nThisShardID]));
             nWalletDBUpdated++;
         }
     } // (!fDisableWallet)

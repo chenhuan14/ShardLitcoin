@@ -42,7 +42,11 @@ int nBestHeight = -1;
 uint256 nBestChainWork = 0;
 uint256 nBestInvalidWork = 0;
 uint256 hashBestChain = 0;
-CBlockIndex* pindexBest = NULL;   // need to be a map struct
+
+//CBlockIndex* pindexBest = NULL;   // need to be a map struct
+/** we change the best block to a vector, the pindexBests[0] represents the main chain best block;*/
+CBlockIndex* pindexBests[SHARD_NUM]; 
+
 set<CBlockIndex*, CBlockIndexWorkComparator> setBlockIndexValid; // may contain all CBlockIndex*'s that have validness >=BLOCK_VALID_TRANSACTIONS, and must contain those who aren't failed
 int64 nTimeBestReceived = 0;
 int nScriptCheckThreads = 0;
@@ -544,7 +548,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
     if (!pindex || !pindex->IsInMainChain())
         return 0;
 
-    return pindexBest->nHeight - pindex->nHeight + 1;
+    return pindexBests[nThisShardID]->nHeight - pindex->nHeight + 1;
 }
 
 
@@ -929,7 +933,7 @@ int CMerkleTx::GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const
     }
 
     pindexRet = pindex;
-    return pindexBest->nHeight - pindex->nHeight + 1;
+    return pindexBests[nThisShardID]->nHeight - pindex->nHeight + 1;
 }
 
 int CMerkleTx::GetDepthInMainChain(CBlockIndex* &pindexRet) const
@@ -1057,7 +1061,7 @@ CBlockIndex* FindBlockByHeight(int nHeight)
     if (nHeight < nBestHeight / 2)
         pblockindex = pindexGenesisBlock;
     else
-        pblockindex = pindexBest;
+        pblockindex = pindexBests[nThisShardID];
     if (pblockindexFBBHLast && abs(nHeight - pblockindex->nHeight) > abs(nHeight - pblockindexFBBHLast->nHeight))
         pblockindex = pblockindexFBBHLast;
     while (pblockindex->nHeight > nHeight)
@@ -1217,17 +1221,17 @@ int GetNumBlocksOfPeers()
 
 bool IsInitialBlockDownload()
 {
-    if (pindexBest == NULL || fImporting || fReindex || nBestHeight < Checkpoints::GetTotalBlocksEstimate())
+    if (pindexBests[nThisShardID] == NULL || fImporting || fReindex || nBestHeight < Checkpoints::GetTotalBlocksEstimate())
         return true;
     static int64 nLastUpdate;
     static CBlockIndex* pindexLastBest;
-    if (pindexBest != pindexLastBest)
+    if (pindexBests[nThisShardID] != pindexLastBest)
     {
-        pindexLastBest = pindexBest;
+        pindexLastBest = pindexBests[nThisShardID];
         nLastUpdate = GetTime();
     }
     return (GetTime() - nLastUpdate < 10 &&
-            pindexBest->GetBlockTime() < GetTime() - 24 * 60 * 60);
+            pindexBests[nThisShardID]->GetBlockTime() < GetTime() - 24 * 60 * 60);
 }
 
 void static InvalidChainFound(CBlockIndex* pindexNew)
@@ -1244,8 +1248,8 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
       pindexNew->GetBlockTime()).c_str());
     printf("InvalidChainFound:  current best=%s  height=%d  log2_work=%.8g  date=%s\n",
       hashBestChain.ToString().c_str(), nBestHeight, log(nBestChainWork.getdouble())/log(2.0),
-      DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBest->GetBlockTime()).c_str());
-    if (pindexBest && nBestInvalidWork > nBestChainWork + (pindexBest->GetBlockWork() * 6).getuint256())
+      DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBests[nThisShardID]->GetBlockTime()).c_str());
+    if (pindexBests[nThisShardID] && nBestInvalidWork > nBestChainWork + (pindexBests[nThisShardID]->GetBlockWork() * 6).getuint256())
         printf("InvalidChainFound: Warning: Displayed transactions may not be correct! You may need to upgrade, or other nodes may need to upgrade.\n");
 }
 
@@ -1271,7 +1275,7 @@ bool ConnectBestBlock(CValidationState &state) {
             pindexNewBest = *it;
         }
 
-        if (pindexNewBest == pindexBest || (pindexBest && pindexNewBest->nChainWork == pindexBest->nChainWork))
+        if (pindexNewBest == pindexBests[nThisShardID] || (pindexBests[nThisShardID] && pindexNewBest->nChainWork == pindexBests[nThisShardID]->nChainWork))
             return true; // nothing to do
 
         // check ancestry
@@ -1291,7 +1295,7 @@ bool ConnectBestBlock(CValidationState &state) {
                 break;
             }
 
-            if (pindexBest == NULL || pindexTest->nChainWork > pindexBest->nChainWork)
+            if (pindexBests[nThisShardID] == NULL || pindexTest->nChainWork > pindexBests[nThisShardID]->nChainWork)
                 vAttach.push_back(pindexTest);
 
             if (pindexTest->pprevs[nThisShardID] == NULL || pindexTest->pnexts[nThisShardID] != NULL) {
@@ -1907,22 +1911,22 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
 
     // New best block
     hashBestChain = pindexNew->GetBlockHash();
-    pindexBest = pindexNew;
+    pindexBests[nThisShardID] = pindexNew;
     pblockindexFBBHLast = NULL;
-    nBestHeight = pindexBest->nHeight;
+    nBestHeight = pindexBests[nThisShardID]->nHeight;
     nBestChainWork = pindexNew->nChainWork;
     nTimeBestReceived = GetTime();
     nTransactionsUpdated++;
     printf("SetBestChain: new best=%s  height=%d  log2_work=%.8g  tx=%lu  date=%s progress=%f\n",
       hashBestChain.ToString().c_str(), nBestHeight, log(nBestChainWork.getdouble())/log(2.0), (unsigned long)pindexNew->nChainTx,
-      DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBest->GetBlockTime()).c_str(),
-      Checkpoints::GuessVerificationProgress(pindexBest));
+      DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBests[nThisShardID]->GetBlockTime()).c_str(),
+      Checkpoints::GuessVerificationProgress(pindexBests[nThisShardID]));
 
     // Check the version of the last 100 blocks to see if we need to upgrade:
     if (!fIsInitialDownload)
     {
         int nUpgraded = 0;
-        const CBlockIndex* pindex = pindexBest;
+        const CBlockIndex* pindex = pindexBests[nThisShardID];
         for (int i = 0; i < 100 && pindex != NULL; i++)
         {
             if (pindex->nVersion > CBlock::CURRENT_VERSION)
@@ -1982,7 +1986,7 @@ bool CBlock::AddToBlockIndex(CValidationState &state, const CDiskBlockPos &pos)
     if (!ConnectBestBlock(state))
         return false;
 
-    if (pindexNew == pindexBest)
+    if (pindexNew == pindexBests[nThisShardID])
     {
         // Notify UI to display prev block's coinbase if it was ours
         static uint256 hashPrevBestCoinBase;
@@ -2318,7 +2322,7 @@ bool ProcessBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDiskBl
             mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
             // Ask this guy to fill in what we're missing
-            pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+            pfrom->PushGetBlocks(pindexBests[nThisShardID], GetOrphanRoot(pblock2));
         }
         return true;
     }
@@ -2632,15 +2636,15 @@ bool static LoadBlockIndexDB()
     printf("LoadBlockIndexDB(): transaction index %s\n", fTxIndex ? "enabled" : "disabled");
 
     // Load hashBestChain pointer to end of best chain
-    pindexBest = pcoinsTip->GetBestBlock();
-    if (pindexBest == NULL)
+    pindexBests[nThisShardID] = pcoinsTip->GetBestBlock();
+    if (pindexBests[nThisShardID] == NULL)
         return true;
-    hashBestChain = pindexBest->GetBlockHash();
-    nBestHeight = pindexBest->nHeight;
-    nBestChainWork = pindexBest->nChainWork;
+    hashBestChain = pindexBests[nThisShardID]->GetBlockHash();
+    nBestHeight = pindexBests[nThisShardID]->nHeight;
+    nBestChainWork = pindexBests[nThisShardID]->nChainWork;
 
     // set 'next' pointers in best chain
-    CBlockIndex *pindex = pindexBest;
+    CBlockIndex *pindex = pindexBests[nThisShardID];
     while(pindex != NULL && pindex->pprevs[nThisShardID] != NULL) {
          CBlockIndex *pindexPrev = pindex->pprevs[nThisShardID];
          pindexPrev->pnexts[nThisShardID] = pindex;
@@ -2648,14 +2652,14 @@ bool static LoadBlockIndexDB()
     }
     printf("LoadBlockIndexDB(): hashBestChain=%s  height=%d date=%s\n",
         hashBestChain.ToString().c_str(), nBestHeight,
-        DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBest->GetBlockTime()).c_str());
+        DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBests[nThisShardID]->GetBlockTime()).c_str());
 
     return true;
 }
 
 bool VerifyDB(int nCheckLevel, int nCheckDepth)
 {
-    if (pindexBest == NULL || pindexBest->pprevs[nThisShardID] == NULL)
+    if (pindexBests[nThisShardID] == NULL || pindexBests[nThisShardID]->pprevs[nThisShardID] == NULL)
         return true;
 
     // Verify blocks in the best chain
@@ -2666,11 +2670,11 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
     nCheckLevel = std::max(0, std::min(4, nCheckLevel));
     printf("Verifying last %i blocks at level %i\n", nCheckDepth, nCheckLevel);
     CCoinsViewCache coins(*pcoinsTip, true);
-    CBlockIndex* pindexState = pindexBest;
+    CBlockIndex* pindexState = pindexBests[nThisShardID];
     CBlockIndex* pindexFailure = NULL;
     int nGoodTransactions = 0;
     CValidationState state;
-    for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprevs[nThisShardID]; pindex = pindex->pprevs[nThisShardID])
+    for (CBlockIndex* pindex = pindexBests[nThisShardID]; pindex && pindex->pprevs[nThisShardID]; pindex = pindex->pprevs[nThisShardID])
     {
         boost::this_thread::interruption_point();
         if (pindex->nHeight < nBestHeight-nCheckDepth)
@@ -2705,12 +2709,12 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
         }
     }
     if (pindexFailure)
-        return error("VerifyDB() : *** coin database inconsistencies found (last %i blocks, %i good transactions before that)\n", pindexBest->nHeight - pindexFailure->nHeight + 1, nGoodTransactions);
+        return error("VerifyDB() : *** coin database inconsistencies found (last %i blocks, %i good transactions before that)\n", pindexBests[nThisShardID]->nHeight - pindexFailure->nHeight + 1, nGoodTransactions);
 
     // check level 4: try reconnecting blocks
     if (nCheckLevel >= 4) {
         CBlockIndex *pindex = pindexState;
-        while (pindex != pindexBest) {
+        while (pindex != pindexBests[nThisShardID]) {
             boost::this_thread::interruption_point();
             pindex = pindex->pnexts[nThisShardID];
             CBlock block;
@@ -2721,7 +2725,7 @@ bool VerifyDB(int nCheckLevel, int nCheckDepth)
         }
     }
 
-    printf("No coin database inconsistencies in last %i blocks (%i transactions)\n", pindexBest->nHeight - pindexState->nHeight, nGoodTransactions);
+    printf("No coin database inconsistencies in last %i blocks (%i transactions)\n", pindexBests[nThisShardID]->nHeight - pindexState->nHeight, nGoodTransactions);
 
     return true;
 }
@@ -2735,7 +2739,11 @@ void UnloadBlockIndex()
     nBestChainWork = 0;
     nBestInvalidWork = 0;
     hashBestChain = 0;
-    pindexBest = NULL;
+    for(unsigned int i =0 ;i< 3;i++)
+    {
+        pindexBests[i] = NULL;
+    }
+    
 }
 
 bool LoadBlockIndex()
@@ -3047,7 +3055,7 @@ string GetWarnings(string strFor)
     }
 
     // Longer invalid proof-of-work chain
-    if (pindexBest && nBestInvalidWork > nBestChainWork + (pindexBest->GetBlockWork() * 6).getuint256())
+    if (pindexBests[nThisShardID] && nBestInvalidWork > nBestChainWork + (pindexBests[nThisShardID]->GetBlockWork() * 6).getuint256())
     {
         nPriority = 2000;
         strStatusBar = strRPC = _("Warning: Displayed transactions may not be correct! You may need to upgrade, or other nodes may need to upgrade.");
@@ -3486,7 +3494,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
                 if (!fImporting && !fReindex)
                     pfrom->AskFor(inv);
             } else if (inv.type == MSG_BLOCK && mapOrphanBlocks.count(inv.hash)) {
-                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(mapOrphanBlocks[inv.hash]));
+                pfrom->PushGetBlocks(pindexBests[nThisShardID], GetOrphanRoot(mapOrphanBlocks[inv.hash]));
             } else if (nInv == nLastBlock) {
                 // In case we are on a very long side-chain, it is possible that we already have
                 // the last block in an inv bundle sent in response to getblocks. Try to detect
@@ -4003,7 +4011,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // Start block sync
         if (pto->fStartSync && !fImporting && !fReindex) {
             pto->fStartSync = false;
-            pto->PushGetBlocks(pindexBest, uint256(0));
+            pto->PushGetBlocks(pindexBests[nThisShardID], uint256(0));
         }
 
         // Resend wallet transactions that haven't gotten in a block yet
@@ -4296,7 +4304,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
     int64 nFees = 0;
     {
         LOCK2(cs_main, mempool.cs);
-        CBlockIndex* pindexPrev = pindexBest;
+        CBlockIndex* pindexPrev = pindexBests[nThisShardID];
         CCoinsViewCache view(*pcoinsTip, true);
 
         // Priority order to process transactions
@@ -4626,7 +4634,7 @@ void static LitecoinMiner(CWallet *pwallet)
         // Create new block
         //
         unsigned int nTransactionsUpdatedLast = nTransactionsUpdated;
-        CBlockIndex* pindexPrev = pindexBest;
+        CBlockIndex* pindexPrev = pindexBests[nThisShardID];
 
         auto_ptr<CBlockTemplate> pblocktemplate(CreateNewBlockWithKey(reservekey));
         if (!pblocktemplate.get())
@@ -4717,7 +4725,7 @@ void static LitecoinMiner(CWallet *pwallet)
                 break;
             if (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60)
                 break;
-            if (pindexPrev != pindexBest)
+            if (pindexPrev != pindexBests[nThisShardID])
                 break;
 
             // Update nTime every few seconds

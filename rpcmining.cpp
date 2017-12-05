@@ -18,7 +18,7 @@ extern unsigned int nThisShardID;
 // or from the last difficulty change if 'lookup' is nonpositive.
 // If 'height' is nonnegative, compute the estimate at the time when a given block was found.
 Value GetNetworkHashPS(int lookup, int height) {
-    CBlockIndex *pb = pindexBest;
+    CBlockIndex *pb = pindexBests[nThisShardID];
 
     if (height >= 0 && height < nBestHeight)
         pb = FindBlockByHeight(height);
@@ -191,10 +191,10 @@ Value getworkex(const Array& params, bool fHelp)
         static CBlockIndex* pindexPrev;
         static int64 nStart;
         static CBlockTemplate* pblocktemplate;
-        if (pindexPrev != pindexBest ||
+        if (pindexPrev != pindexBests[nThisShardID] ||
             (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
         {
-            if (pindexPrev != pindexBest)
+            if (pindexPrev != pindexBests[nThisShardID])
             {
                 // Deallocate old blocks since they're obsolete now
                 mapNewBlock.clear();
@@ -208,7 +208,7 @@ Value getworkex(const Array& params, bool fHelp)
 
             // Store the pindexBest used before CreateNewBlock, to avoid races
             nTransactionsUpdatedLast = nTransactionsUpdated;
-            CBlockIndex* pindexPrevNew = pindexBest;
+            CBlockIndex* pindexPrevNew = pindexBests[nThisShardID];
             nStart = GetTime();
 
             // Create new block
@@ -330,10 +330,10 @@ Value getwork(const Array& params, bool fHelp)
         static CBlockIndex* pindexPrev;
         static int64 nStart;
         static CBlockTemplate* pblocktemplate;
-        if (pindexPrev != pindexBest ||
+        if (pindexPrev != pindexBests[nThisShardID] ||
             (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60))
         {
-            if (pindexPrev != pindexBest)
+            if (pindexPrev != pindexBests[nThisShardID])
             {
                 // Deallocate old blocks since they're obsolete now
                 mapNewBlock.clear();
@@ -347,7 +347,7 @@ Value getwork(const Array& params, bool fHelp)
 
             // Store the pindexBest used before CreateNewBlock, to avoid races
             nTransactionsUpdatedLast = nTransactionsUpdated;
-            CBlockIndex* pindexPrevNew = pindexBest;
+            CBlockIndex* pindexPrevNew = pindexBests[nThisShardID];
             nStart = GetTime();
 
             // Create new block
@@ -466,7 +466,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     static CBlockIndex* pindexPrev;
     static int64 nStart;
     static CBlockTemplate* pblocktemplate;
-    if (pindexPrev != pindexBest ||
+    if (pindexPrev != pindexBests[nThisShardID] ||
         (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 5))
     {
         // Clear pindexPrev so future calls make a new block, despite any failures from here on
@@ -474,7 +474,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
 
         // Store the pindexBest used before CreateNewBlock, to avoid races
         nTransactionsUpdatedLast = nTransactionsUpdated;
-        CBlockIndex* pindexPrevNew = pindexBest;
+        CBlockIndex* pindexPrevNew = pindexBests[nThisShardID];
         nStart = GetTime();
 
         // Create new block

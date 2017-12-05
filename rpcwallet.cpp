@@ -1220,10 +1220,10 @@ Value listsinceblock(const Array& params, bool fHelp)
     }
     else
     {
-        int target_height = pindexBest->nHeight + 1 - target_confirms;
+        int target_height = pindexBests[nThisShardID]->nHeight + 1 - target_confirms;
 
         CBlockIndex *block;
-        for (block = pindexBest;
+        for (block = pindexBests[nThisShardID];
              block && block->nHeight > target_height;
              block = block->pprevs[nThisShardID])  { }
 
