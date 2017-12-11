@@ -2797,7 +2797,7 @@ bool InitBlockIndex() {
         CBlock block;
         block.vtx.push_back(txNew);
         block.hashPrevBlock = 0;
-        block.nShardID = 0;
+        block.nShardID = nThisShardID;
         for (unsigned int i = 0 ;i < SHARD_NUM; i++)
         {
             block.vHashShardPrevBlocks[i] = 0;

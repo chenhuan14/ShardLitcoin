@@ -1911,7 +1911,7 @@ public:
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex) {
         for(unsigned int i = 0;i < SHARD_NUM;i++)
         {
-           hashPrevs[i] = (pnexts[i] ? pprevs[i]->GetBlockHash() : 0);
+           hashPrevs[i] = (pprevs[i] ? pprevs[i]->GetBlockHash() : 0);
         }
         
     }
