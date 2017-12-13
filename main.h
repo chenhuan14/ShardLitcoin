@@ -1330,7 +1330,7 @@ public:
     {
         nVersion = CBlockHeader::CURRENT_VERSION;
         hashPrevBlock = 0;
-        nShardID = nThisShardID;
+        nShardID = 0;
         for (unsigned int i = 0; i< SHARD_NUM; i++)
         {
             vHashShardPrevBlocks[i] = 0;
@@ -1787,6 +1787,7 @@ public:
         CBlockHeader block;
         block.nVersion       = nVersion;
         block.nShardID       = nShardID;
+        block.hashPrevBlock  = pprevs[nThisShardID]->GetBlockHash();
         for (unsigned int i = 0 ;i < SHARD_NUM; i++)
         {
             if(pprevs[i])
@@ -1909,6 +1910,7 @@ public:
     }
 
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex) {
+
         for(unsigned int i = 0;i < SHARD_NUM;i++)
         {
            hashPrevs[i] = (pprevs[i] ? pprevs[i]->GetBlockHash() : 0);
@@ -1934,6 +1936,7 @@ public:
         // block header
         READWRITE(this->nVersion);
         READWRITE(nShardID);
+        READWRITE(hashPrevs[nThisShardID]);
         READWRITE(FLATDATA(hashPrevs));
         READWRITE(hashMerkleRoot);
         READWRITE(nTime);

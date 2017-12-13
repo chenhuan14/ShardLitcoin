@@ -4486,6 +4486,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
+        pblock->vHashShardPrevBlocks[nThisShardID] = pindexPrev->GetBlockHash();
         pblock->UpdateTime(pindexPrev);
         pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock);
         pblock->nNonce         = 0;
